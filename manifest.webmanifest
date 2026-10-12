@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "InkNest — Unlimited Notebooks",
+  "name": "InkNest 2 \u2014 Notebook Studio",
   "short_name": "InkNest",
-  "description": "Write, sketch, and study. Unlimited notebooks saved on your device.",
+  "description": "Fast Apple Pencil drawing, pinch zoom, infinite notebooks, saved on your iPad.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +10,17 @@
   "theme_color": "#386cb4",
   "orientation": "any",
   "icons": [
-    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose":"any maskable"},
-    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose":"any maskable"}
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

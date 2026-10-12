@@ -1,64 +1,50 @@
-# InkNest — Offline iPad Notebooks
+# InkNest 2.0 — iPad writing and zoom update
 
-A self-contained **progressive web app (PWA)** for school notes, inspired by the general notebook/drawing workflow of Goodnotes. InkNest is independent software; it does not copy Goodnotes code, assets, or branding.
+InkNest is a standalone **offline-first note-taking progressive web app (PWA)**. It is inspired by notebook workflows, but is not Goodnotes and does not include or reproduce its proprietary code, artwork, branding or paid services.
 
-## What's included
+## Update an existing GitHub Pages installation
 
-- Unlimited notebooks and unlimited pages (limited only by your device's available storage).
-- Pencil / finger drawing, highlighter, eraser, and adjustable pen colors and thickness.
-- Auto-save to **IndexedDB on the same device**. No login, no servers, no paid tiers.
-- Blank, graph-grid, lined, and dot-grid paper.
-- White, black, pastel, and any custom page color; optionally apply paper style to every page.
-- Neat editable text blocks using the `T` tool. iPadOS **Scribble** can convert Apple Pencil handwriting to typed text **inside the text entry field**.
-- Insert photos into a page from Files or Photos.
-- Add/delete pages, duplicate pages or whole notebooks, rename notebooks, search, undo and redo.
-- Export entire notebooks as PDF, export the current page as PNG.
-- Download **JSON backups of all notebooks** and restore them later.
-- After initial HTTPS installation, the app works offline using a service worker.
+**IMPORTANT: Back up your notes BEFORE upgrading.**
 
-**Not yet included:** OCR conversion of arbitrary pen strokes, audio recording, PDF importing/editing, collaboration, handwriting search, handwriting math recognition, and exact Goodnotes feature parity. For an **on-device handwriting-to-neat-text conversion button**, see the separate native iOS project.
+1. On your iPad, open the **existing InkNest** home-screen app. Tap the **three-dot menu → Export all notebooks (backup)**. Save the backup JSON to **Files → On My iPad**, or another safe location.
+2. On Windows, unzip `InkNest-2.0-GitHub-Pages.zip`. You will see `index.html`, `app.js`, `styles.css`, `sw.js`, `manifest.webmanifest`, `icon-192.png`, `icon-512.png`, and this `README.md`.
+3. Go to the **same GitHub repository** where your current InkNest is published. Do **not** create a new repository or rename the current repository. Your existing local notes are tied to the app's website address.
+4. On the repository home page, use **Add file → Upload files**, and upload the **individual extracted files**, not the ZIP. If GitHub prompts about replacing files with the same names, choose to replace them. Commit the changes to `main`.
+5. Wait for deployment: **Settings → Pages** shows the published URL. On your iPad, open that exact URL in Safari while online, and refresh after deployment. Reopen the existing InkNest home-screen app. If it still shows the old UI, wait a minute and fully close/reopen it while online so Safari can activate the updated service worker.
+6. **Do not clear Safari website data, delete the existing home-screen app, or change the GitHub Pages URL** to force a refresh. Doing so may delete or strand local notebooks. Keep your JSON backup safe.
 
-## Install on your iPad — no Mac needed
+### First-time installation
 
-A web app must be hosted at an HTTPS URL for reliable offline installation and storage. Hosting its static code is NOT cloud storage for your notes; your notebook data stays in the browser on the iPad.
+Publish extracted files in the root of a **public GitHub repository** using **Settings → Pages → Deploy from a branch → main → / (root)**. Open the generated HTTPS URL in iPad Safari, tap **Share → Add to Home Screen** and launch InkNest from the icon. You need online access once to cache the app.
 
-### Free GitHub Pages route
+## What's new in version 2
 
-1. Unzip `InkNest-Web.zip`.
-2. On github.com, create a new **public** repository, e.g. `inknest`.
-3. Use **Add file → Upload files** to upload the actual files `index.html`, `styles.css`, `app.js`, `sw.js`, `manifest.webmanifest`, `icon-192.png`, `icon-512.png` **into the root of the repository**, not into an extra nested folder. Commit the files.
-4. In the repository go to **Settings → Pages**. Choose **Deploy from a branch**, choose `main`, `/ (root)`, and Save.
-5. Open the published website URL (usually `https://YOUR_USERNAME.github.io/inknest/`) in **Safari on your iPad**.
-6. Tap **Share → Add to Home Screen → Add**. Open **InkNest** from the new Home Screen icon.
-7. Open the app online once, then it can run without a network connection.
+- **Responsive Apple Pencil ink**: drawing happens on a transparent, incremental ink canvas over the finished notebook canvas, instead of repainting all existing strokes on *every pointer move*. Uses Safari Pointer Events and coalesced samples where supported.
+- **Zoom only on the paper**: pinch with two fingers directly on the sheet to zoom in and out; move the two fingers together to pan around. The drawing area is now scrollable even when the enlarged paper is wider than the viewport.
+- **25%–400% zoom**, with `+`, `−`, and **Fit** controls. Resolution re-rasterizes after zoom stops to keep fine lines crisp.
+- **Hand tool** for dragging the paper and **Pencil only** mode so one finger pans and Apple Pencil writes. For the smoothest classroom experience, turn **Pencil only** on when using Apple Pencil.
+- **Shape tool** for straight lines, rectangles, and ellipses.
+- **Pressure-responsive ink width** for Apple Pencil events that report pressure.
+- **Faster undo** for ordinary pen strokes without cloning the entire page on each stroke.
+- Updated offline service worker that prefers current assets when online and keeps assets cached for offline use.
 
-You may use any other static HTTPS host if you prefer (Netlify, Cloudflare Pages, etc.).
+## Existing functionality
 
-### School-use notes
+Unlimited notebooks/pages (constrained by your device's storage), local IndexedDB autosave, pen/highlighter/eraser, editable typed text, on-iPad Scribble *inside text fields*, custom ink colors, custom paper colors including midnight, blank/grid/dotted/ruled paper, notebook search/rename/duplicate/delete, page management, photo insertion, PDF/PNG export and JSON backup/import.
 
-- Safari/iPadOS can clear site data when storage is low or you clear browsing data. **Export a backup often** from the top-right `···` menu → *Export all notebooks (backup)*, and save the JSON file in On My iPad.
-- If you use a different browser, private browsing, different website URL, or a different device, your locally saved notebooks will not automatically appear.
-- A private/incognito window is not recommended for important schoolwork.
-- Do not delete the iPad app, clear its site data, or reset your iPad without saving a backup.
-- The `T` tool uses clean system text. On supported iPads, Apple Pencil **Scribble** works in the typing box, but the browser version does NOT automatically turn existing hand-drawn ink into a font.
-- Apple Pencil pressure support depends on Safari/iPadOS. Drawing with your finger also works.
+## Important limitations
 
-## Local development
+- This is **not a 100% Goodnotes replica**. There is no arbitrary-stroke handwriting-to-font converter, PDF import/annotation, OCR handwriting search, audio-synced notes, lasso, collaboration, or Goodnotes proprietary interface and recognition engine.
+- A browser PWA cannot access all the Apple Pencil/PencilKit latency optimizations that a compiled iPadOS app can. It should be noticeably less laggy than version 1, but identical Goodnotes-level performance isn't guaranteed.
+- Apple Pencil pressure, sampling rate, palm rejection and some gestures depend on your iPad, Apple Pencil model, Safari/iPadOS version, and available memory.
+- All notebook **data** stays in the browser's IndexedDB on this iPad. GitHub Pages hosts app code only; it does not sync your notebooks to other devices.
+- Local site data may be purged by iPadOS under storage pressure. **Export backup JSON regularly**. Do not use private browsing.
+- Publishing to a different repository name, moving the app to a new domain or changing its URL can make previous local notes inaccessible, even though they may still exist in the original site's storage.
 
-From this directory, start any static server, for example:
+## Testing
 
-```sh
-python3 -m http.server 8000
-```
+Version 2 was checked for JavaScript syntax, HTML control ID integrity, and exercised in a headless Chromium session (including drawing, undo/redo, rectangle shape, dark/dotted paper, button zoom, fit, synthetic two-finger pinch and Pencil-only finger rejection). **It has not been tested on a physical iPad or real Apple Pencil**.
 
-Then visit `http://localhost:8000` in your desktop browser. For iPad installation, publish through HTTPS.
+## Run on Windows for development
 
-## Project structure
-
-- `index.html`: all app screens and controls
-- `styles.css`: responsive iPad/tablet layout
-- `app.js`: notebook model, drawing engine, IndexedDB, export/import, interactions
-- `sw.js`: offline cache for static app files
-- `manifest.webmanifest`, `icon-*.png`: Add to Home Screen support
-
-No frameworks, ads, analytics, accounts, CDNs, or external packages.
+You can serve the extracted folder on your computer with Python: `python -m http.server 8000`, then open `http://localhost:8000` in your desktop browser. For the iPad home-screen installation use the hosted HTTPS GitHub Pages version.

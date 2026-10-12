@@ -7,9 +7,13 @@ const state = {
   ink: '#25344e', width: 3, zoom: 55, zoomManual: false, cover: 'blue',
   editingId: null, selectedText: null, textPoint: null, menuId: null,
   undo: new Map(), redo: new Map(), drawing: null, activePointer: null,
-  lastPenAt: 0, selectedPenOnly: false
+  lastPenAt: 0, selectedPenOnly: false, shape: 'line'
 };
-const canvas = $('drawCanvas'), ctx = canvas.getContext('2d', { alpha: false });
+const canvas = $('drawCanvas'), inkOverlay = $('inkOverlay');
+const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+const liveCtx = inkOverlay.getContext('2d', { alpha: true, desynchronized: true });
+const touchContacts = new Map();
+let gesture = null, renderScale = 1, qualityTimer = null, paintRequest = null;
 const imageCache = new Map();
 let db = null, saveTimer = null, toastTimer = null, saving = Promise.resolve(), contextActions = [];
 const uid = () => (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(16).slice(2));
@@ -56,11 +60,11 @@ function touch(){const n=notebook();if(n)n.updatedAt=Date.now();queueSave();}
 function queueSave(){
   $('saveStatus').innerHTML='<span class="save-dot"></span> Saving…';
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveNow,350);
+  saveTimer=setTimeout(saveNow,1100);
 }
 function saveNow(){
   clearTimeout(saveTimer);
-  const data={version:1,notebooks:deep(state.notebooks),activeId:state.activeId};
+  const data={version:1,notebooks:state.notebooks,activeId:state.activeId};
   saving=saving.catch(()=>{}).then(()=>dbWrite(data)).then(()=>{
     $('saveStatus').innerHTML='<span class="save-dot"></span> Saved on device';
   }).catch(err=>{console.error('Save failed',err);$('saveStatus').textContent='⚠ Save failed';toast('Storage is full or blocked. Export a backup now.');});
@@ -77,15 +81,37 @@ function checkpoint(){
 }
 function snapshot(p){return deep({strokes:p.strokes,texts:p.texts,images:p.images,paper:p.paper,pattern:p.pattern});}
 function restore(p,s){Object.assign(p,s);renderPaperUI();renderCanvas();renderThumbnails();touch();}
+// Lightweight ink history: a pen stroke does not deep-copy the entire page.
+function recordInkStroke(stroke){
+  const p=page();if(!p)return;
+  const a=pageUndoBucket();a.push({__op:'removeStroke',id:stroke.id});
+  if(a.length>50)a.shift();
+  state.undo.set(p.id,a);state.redo.set(p.id,[]);updateUndoButtons();
+}
+function applyHistoryStep(p,step){
+  if(step.__op==='removeStroke'){
+    const index=p.strokes.findIndex(s=>s.id===step.id);
+    if(index<0)return null;
+    const [stroke]=p.strokes.splice(index,1);
+    return {__op:'insertStroke',stroke,index};
+  }
+  if(step.__op==='insertStroke'){
+    p.strokes.splice(Math.min(step.index,p.strokes.length),0,step.stroke);
+    return {__op:'removeStroke',id:step.stroke.id};
+  }
+  const inverse=snapshot(p);Object.assign(p,step);return inverse;
+}
 function undo(){
   const p=page(), arr=pageUndoBucket();if(!p||!arr.length)return;
-  const r=state.redo.get(p.id)||[];r.push(snapshot(p));state.redo.set(p.id,r);
-  restore(p,arr.pop());updateUndoButtons();
+  const inverse=applyHistoryStep(p,arr.pop()),r=state.redo.get(p.id)||[];
+  if(inverse)r.push(inverse);
+  state.redo.set(p.id,r);renderPaperUI();renderCanvas();renderThumbnails();touch();updateUndoButtons();
 }
 function redo(){
   const p=page(),r=state.redo.get(state.activePageId)||[];if(!p||!r.length)return;
-  const a=pageUndoBucket();a.push(snapshot(p));state.undo.set(p.id,a);
-  restore(p,r.pop());updateUndoButtons();
+  const inverse=applyHistoryStep(p,r.pop()),a=pageUndoBucket();
+  if(inverse)a.push(inverse);
+  state.undo.set(p.id,a);renderPaperUI();renderCanvas();renderThumbnails();touch();updateUndoButtons();
 }
 function updateUndoButtons(){$('undoBtn').disabled=!pageUndoBucket().length;$('redoBtn').disabled=!(state.redo.get(state.activePageId)||[]).length;}
 
@@ -220,13 +246,59 @@ function renderThumbnails(){
 function fitPage(){
   if(state.zoomManual)return;
   const a=$('canvasArea');
-  const z=Math.min((a.clientWidth-74)/PAGE_W,(a.clientHeight-45)/PAGE_H,.9);
-  state.zoom=Math.round(Math.max(.3,z)*100);
+  const z=Math.min((a.clientWidth-54)/PAGE_W,(a.clientHeight-50)/PAGE_H,1);
+  state.zoom=Math.round(Math.max(.25,z)*100);
   setZoom();
 }
-function setZoom(){
-  $('pageHolder').style.setProperty('--zoom',state.zoom/100);
+function setZoom(deferQuality=false){
+  const a=$('canvasArea'),holder=$('pageHolder');
+  holder.style.setProperty('--zoom',state.zoom/100);
   $('zoomLabel').textContent=state.zoom+'%';
+  $('zoomOut').disabled=state.zoom<=25;
+  $('zoomIn').disabled=state.zoom>=400;
+  clearTimeout(qualityTimer);
+  if(!deferQuality)qualityTimer=setTimeout(()=>renderCanvas(),130);
+}
+function zoomTo(newZoom,anchorX=null,anchorY=null,deferQuality=false){
+  const a=$('canvasArea'),holder=$('pageHolder');
+  const r=holder.getBoundingClientRect();
+  const x=anchorX??a.getBoundingClientRect().left+a.clientWidth/2;
+  const y=anchorY??a.getBoundingClientRect().top+a.clientHeight/2;
+  const rx=(x-r.left)/r.width,ry=(y-r.top)/r.height;
+  state.zoom=Math.round(Math.max(25,Math.min(400,newZoom)));
+  state.zoomManual=true;
+  setZoom(deferQuality);
+  const r2=holder.getBoundingClientRect();
+  a.scrollLeft+=r2.left+rx*r2.width-x;
+  a.scrollTop+=r2.top+ry*r2.height-y;
+}
+function fitAndCenter(){
+  state.zoomManual=false;
+  fitPage();
+  requestAnimationFrame(()=>{
+    const a=$('canvasArea');
+    a.scrollLeft=Math.max(0,(a.scrollWidth-a.clientWidth)/2);
+    a.scrollTop=0;
+    renderCanvas();
+  });
+}
+function updateCanvasResolution(){
+  const desired=Math.min(2.25,Math.max(1,(window.devicePixelRatio||1)*state.zoom/100));
+  if(Math.abs(desired-renderScale)<.055 && canvas.width===Math.round(PAGE_W*renderScale))return;
+  renderScale=desired;
+  const w=Math.round(PAGE_W*desired),h=Math.round(PAGE_H*desired);
+  if(canvas.width!==w||canvas.height!==h){
+    canvas.width=w;canvas.height=h;
+    inkOverlay.width=w;inkOverlay.height=h;
+  }
+}
+function clearLive(){
+  liveCtx.setTransform(1,0,0,1,0,0);
+  liveCtx.clearRect(0,0,inkOverlay.width,inkOverlay.height);
+}
+function frameRenderCanvas(){
+  if(paintRequest!==null)return;
+  paintRequest=requestAnimationFrame(()=>{paintRequest=null;renderCanvas();});
 }
 function cssLuminance(hex){
   const rgb=hex.match(/\w\w/g)?.map(s=>parseInt(s,16))||[255,255,255];
@@ -256,6 +328,22 @@ function drawStroke(c,s,scale=1){
   const pts=s.pts; c.save();c.globalAlpha=s.tool==='highlighter'?.31:1;c.lineCap='round';c.lineJoin='round';c.strokeStyle=s.color;
   c.lineWidth=(s.tool==='highlighter'?Math.max(19,s.width*5):s.width)*scale;
   c.beginPath();
+  if(s.shape && pts.length>=2){
+    const a=pts[0],b=pts[pts.length-1],x=a[0]*scale,y=a[1]*scale,w=(b[0]-a[0])*scale,h=(b[1]-a[1])*scale;
+    if(s.shape==='line'){c.moveTo(x,y);c.lineTo(x+w,y+h);}
+    else if(s.shape==='rectangle')c.rect(x,y,w,h);
+    else if(s.shape==='ellipse')c.ellipse(x+w/2,y+h/2,Math.max(.1,Math.abs(w/2)),Math.max(.1,Math.abs(h/2)),0,0,Math.PI*2);
+    c.stroke();c.restore();return;
+  }
+  if(s.pressureInk && s.tool==='pen' && pts.length>1){
+    for(let i=1;i<pts.length;i++){
+      const a=pts[i-1],b=pts[i];
+      const pressure=Math.max(.18,Math.min(1,((a[2]||.5)+(b[2]||.5))/2));
+      c.lineWidth=s.width*scale*(.55+pressure*.9);
+      c.beginPath();c.moveTo(a[0]*scale,a[1]*scale);c.lineTo(b[0]*scale,b[1]*scale);c.stroke();
+    }
+    c.restore();return;
+  }
   if(pts.length===1){c.moveTo(pts[0][0]*scale,pts[0][1]*scale);c.lineTo(pts[0][0]*scale+.05,pts[0][1]*scale+.05);}
   else{c.moveTo(pts[0][0]*scale,pts[0][1]*scale);for(let i=1;i<pts.length-1;i++){
     const p=pts[i],q=pts[i+1];c.quadraticCurveTo(p[0]*scale,p[1]*scale,(p[0]+q[0])/2*scale,(p[1]+q[1])/2*scale);
@@ -296,11 +384,17 @@ function drawPage(c,p,scale=1){
 }
 function renderCanvas(){
   const p=page();if(!p)return;
-  ctx.clearRect(0,0,PAGE_W,PAGE_H);drawPage(ctx,p,1);
-  if(state.drawing && state.drawing.pageId===p.id &&state.drawing.stroke)drawStroke(ctx,state.drawing.stroke,1);
+  updateCanvasResolution();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawPage(ctx,p,renderScale);
+  // The live ink layer is separate: background, photos and older strokes
+  // do not need re-rasterizing for every Apple Pencil movement.
+  clearLive();
+  if(state.drawing?.stroke && state.drawing.pageId===p.id)drawStroke(liveCtx,state.drawing.stroke,renderScale);
 }
 function positionFromEvent(e){
-  const r=canvas.getBoundingClientRect();
+  const r=inkOverlay.getBoundingClientRect();
   return {x:Math.max(0,Math.min(PAGE_W,(e.clientX-r.left)*PAGE_W/r.width)),y:Math.max(0,Math.min(PAGE_H,(e.clientY-r.top)*PAGE_H/r.height))};
 }
 function distSegment(x,y,a,b){
@@ -309,12 +403,21 @@ function distSegment(x,y,a,b){
   const t=Math.max(0,Math.min(1,((x-a[0])*vx+(y-a[1])*vy)/len));
   return Math.hypot(x-a[0]-t*vx,y-a[1]-t*vy);
 }
+function shapePathPoints(s){
+  const a=s.pts[0],b=s.pts[s.pts.length-1];
+  if(!s.shape||!b)return s.pts;
+  if(s.shape==='line')return [a,b];
+  if(s.shape==='rectangle')return [a,[b[0],a[1]],b,[a[0],b[1]],a];
+  const out=[];
+  for(let i=0;i<=48;i++){const t=i*Math.PI*2/48;out.push([(a[0]+b[0])/2+Math.cos(t)*(b[0]-a[0])/2,(a[1]+b[1])/2+Math.sin(t)*(b[1]-a[1])/2]);}
+  return out;
+}
 function eraseAt(x,y){
   const p=page();if(!p)return false;
   for(let i=p.strokes.length-1;i>=0;i--){
-    const s=p.strokes[i],r=Math.max(20,s.width*2.5);
-    for(let j=0;j<s.pts.length;j++){
-      if(distSegment(x,y,s.pts[j],s.pts[Math.min(j+1,s.pts.length-1)])<r){
+    const s=p.strokes[i],r=Math.max(13,s.width*2.5),pts=shapePathPoints(s);
+    for(let j=0;j<pts.length;j++){
+      if(distSegment(x,y,pts[j],pts[Math.min(j+1,pts.length-1)])<r){
         p.strokes.splice(i,1);return true;
       }
     }
@@ -326,12 +429,83 @@ function findTextAt(x,y){
     if(x>=t.x-10&&x<=t.x+b.width+10&&y>=t.y-10&&y<=t.y+b.height+10)return t;
   }return null;
 }
+function strokeStyleForLive(s){
+  liveCtx.globalAlpha=s.tool==='highlighter'?.31:1;
+  liveCtx.lineCap='round';liveCtx.lineJoin='round';
+  liveCtx.strokeStyle=s.color;
+  liveCtx.lineWidth=(s.tool==='highlighter'?Math.max(19,s.width*5):s.width)*renderScale;
+}
+function addLivePoint(s,point){
+  const pts=s.pts,prev=pts[pts.length-1];
+  if(Math.hypot(point[0]-prev[0],point[1]-prev[1])<.4)return;
+  pts.push(point);
+  if(s.shape){
+    clearLive();drawStroke(liveCtx,s,renderScale);
+    return;
+  }
+  // Stream only the new tiny segment to the transparent canvas.
+  // Never repaint the full notebook while writing.
+  liveCtx.save();strokeStyleForLive(s);
+  if(s.pressureInk){
+    const pressure=Math.max(.18,Math.min(1,((prev[2]||.5)+(point[2]||.5))/2));
+    liveCtx.lineWidth=s.width*renderScale*(.55+pressure*.9);
+  }
+  liveCtx.beginPath();
+  liveCtx.moveTo(prev[0]*renderScale,prev[1]*renderScale);
+  liveCtx.lineTo(point[0]*renderScale,point[1]*renderScale);
+  liveCtx.stroke();liveCtx.restore();
+}
+function cancelActiveStroke(){
+  state.drawing=null;state.activePointer=null;clearLive();
+}
+function startGesture(){
+  if(touchContacts.size<2)return;
+  const pts=[...touchContacts.values()].slice(0,2);
+  gesture={dist:Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)),
+    centerX:(pts[0].x+pts[1].x)/2,centerY:(pts[0].y+pts[1].y)/2,
+    zoom:state.zoom};
+}
+function moveGesture(){
+  if(!gesture||touchContacts.size<2)return;
+  const pts=[...touchContacts.values()].slice(0,2);
+  const dist=Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y));
+  const centerX=(pts[0].x+pts[1].x)/2,centerY=(pts[0].y+pts[1].y)/2;
+  const multiplier=dist/gesture.dist;
+  const requestedZoom=gesture.zoom*multiplier;
+  // Zoom towards the previous finger midpoint then move the paper with both fingers.
+  zoomTo(requestedZoom,gesture.centerX,gesture.centerY,true);
+  const a=$('canvasArea');
+  a.scrollLeft+=gesture.centerX-centerX;
+  a.scrollTop+=gesture.centerY-centerY;
+  gesture.centerX=centerX;gesture.centerY=centerY;
+  gesture.dist=dist;gesture.zoom=state.zoom;
+}
 function onPointerDown(e){
-  const p=page();if(!p||!e.isPrimary&&e.pointerType==='touch')return;
+  const p=page();if(!p)return;
   if(e.pointerType==='pen')state.lastPenAt=Date.now();
-  if(e.pointerType==='touch'&&(state.selectedPenOnly||Date.now()-state.lastPenAt<850))return;
-  e.preventDefault();canvas.setPointerCapture(e.pointerId);
+  const recentPencil=e.pointerType==='touch'&&(Date.now()-state.lastPenAt<240);
+  if(recentPencil)return; // reject the palm while Apple Pencil is in use
+  if(e.pointerType==='touch'){
+    touchContacts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchContacts.size>=2){
+      if(state.drawing?.pointerType==='pen'){touchContacts.delete(e.pointerId);return;}
+      e.preventDefault();inkOverlay.setPointerCapture(e.pointerId);
+      cancelActiveStroke();
+      if(touchContacts.size===2)startGesture();
+      return;
+    }
+    if(gesture)return;
+  }
+  if(state.activePointer!==null)return;
+  e.preventDefault();
+  inkOverlay.setPointerCapture(e.pointerId);
   const pos=positionFromEvent(e);
+  const pan=state.tool==='hand'||(state.selectedPenOnly&&e.pointerType==='touch');
+  if(pan){
+    state.activePointer=e.pointerId;
+    state.drawing={pageId:p.id,pan:true,pointerType:e.pointerType,lastX:e.clientX,lastY:e.clientY};
+    return;
+  }
   if(state.tool==='text'){
     const existing=findTextAt(pos.x,pos.y);state.selectedText=existing?.id||null;state.textPoint=pos;
     $('textDialogTitle').textContent=existing?'Edit your text':'Add beautiful text';
@@ -340,41 +514,78 @@ function onPointerDown(e){
     $('textDialog').showModal();setTimeout(()=>$('textContent').focus(),80);return;
   }
   state.activePointer=e.pointerId;
-  if(state.tool==='eraser'){checkpoint();state.drawing={pageId:p.id,erase:true,changed:eraseAt(pos.x,pos.y)};renderCanvas();return;}
-  const stroke={tool:state.tool,color:state.ink,width:state.width,pts:[[pos.x,pos.y,e.pressure||.5]]};
-  state.drawing={pageId:p.id,stroke};renderCanvas();
+  if(state.tool==='eraser'){
+    checkpoint();state.drawing={pageId:p.id,erase:true,pointerType:e.pointerType,changed:eraseAt(pos.x,pos.y)};
+    frameRenderCanvas();return;
+  }
+  const stroke={id:uid(),tool:state.tool==='shape'?'pen':state.tool,color:state.ink,width:state.width,pts:[[pos.x,pos.y,e.pressure||.5]]};
+  if(e.pointerType==='pen'&&state.tool==='pen')stroke.pressureInk=true;
+  if(state.tool==='shape'){stroke.shape=state.shape;stroke.pts.push([pos.x,pos.y,e.pressure||.5]);}
+  state.drawing={pageId:p.id,stroke,pointerType:e.pointerType};
+  if(!stroke.shape){
+    liveCtx.save();strokeStyleForLive(stroke);
+    liveCtx.beginPath();liveCtx.arc(pos.x*renderScale,pos.y*renderScale,Math.max(.3,stroke.width*renderScale/2),0,Math.PI*2);
+    liveCtx.fillStyle=stroke.color;liveCtx.globalAlpha=stroke.tool==='highlighter'?.31:1;liveCtx.fill();liveCtx.restore();
+  }
 }
 function onPointerMove(e){
+  if(e.pointerType==='touch'&&touchContacts.has(e.pointerId)){
+    touchContacts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(gesture){e.preventDefault();moveGesture();return;}
+  }
   if(state.activePointer!==e.pointerId||!state.drawing)return;
-  e.preventDefault();const points=e.getCoalescedEvents?.()||[e];
+  if(e.pointerType==='pen')state.lastPenAt=Date.now();
+  e.preventDefault();
+  const d=state.drawing;
+  if(d.pan){
+    const a=$('canvasArea');
+    a.scrollLeft+=d.lastX-e.clientX;a.scrollTop+=d.lastY-e.clientY;
+    d.lastX=e.clientX;d.lastY=e.clientY;return;
+  }
+  const points=(e.getCoalescedEvents?.()||[]).length?e.getCoalescedEvents():[e];
   for(const ev of points){
     const pos=positionFromEvent(ev);
-    if(state.drawing.erase){state.drawing.changed=eraseAt(pos.x,pos.y)||state.drawing.changed;}
-    else{
-      const pts=state.drawing.stroke.pts,last=pts[pts.length-1];
-      if(Math.hypot(last[0]-pos.x,last[1]-pos.y)>1.1)pts.push([pos.x,pos.y,ev.pressure||.5]);
-    }
+    if(d.erase)d.changed=eraseAt(pos.x,pos.y)||d.changed;
+    else if(d.stroke.shape)d.stroke.pts[d.stroke.pts.length-1]=[pos.x,pos.y,ev.pressure||.5];
+    else addLivePoint(d.stroke,[pos.x,pos.y,ev.pressure||.5]);
   }
-  renderCanvas();
+  if(d.erase)frameRenderCanvas();
+  else if(d.stroke.shape){clearLive();drawStroke(liveCtx,d.stroke,renderScale);}
 }
 function onPointerUp(e){
+  if(e.pointerType==='touch'){
+    touchContacts.delete(e.pointerId);
+    if(gesture){
+      if(touchContacts.size<2){
+        gesture=null;
+        clearTimeout(qualityTimer);qualityTimer=setTimeout(()=>renderCanvas(),180);
+      }
+      return;
+    }
+  }
   if(state.activePointer!==e.pointerId)return;
   e.preventDefault();
   const d=state.drawing,p=page();
   if(p&&d?.stroke){
-    checkpoint();
+    // Keep end-of-stroke work small to avoid freezes between letters.
     if(d.stroke.pts.length===1)d.stroke.pts.push([...d.stroke.pts[0]]);
-    p.strokes.push(d.stroke);
-    touch();
-  }else if(p&&d?.erase){if(d.changed)touch();else{
-    // Avoid an undo entry for an eraser gesture that hit nothing.
-    const bucket=pageUndoBucket();bucket.pop();updateUndoButtons();
-  }}
-  state.drawing=null;state.activePointer=null;renderCanvas();
+    recordInkStroke(d.stroke);
+    p.strokes.push(d.stroke);touch();
+  }else if(p&&d?.erase){
+    if(d.changed)touch();else{
+      const bucket=pageUndoBucket();bucket.pop();updateUndoButtons();
+    }
+  }
+  state.drawing=null;state.activePointer=null;
+  // Rasterize finished ink once and clear the disposable live layer.
+  if(d?.stroke){
+    ctx.save();drawStroke(ctx,d.stroke,renderScale);ctx.restore();clearLive();
+  }else if(d?.erase)frameRenderCanvas();
 }
 function setTool(tool){
   state.tool=tool;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));
-  canvas.style.cursor=tool==='text'?'text':tool==='eraser'?'cell':'crosshair';
+  $('shapePicker').classList.toggle('hidden',tool!=='shape');
+  inkOverlay.style.cursor=tool==='text'?'text':tool==='eraser'?'cell':tool==='hand'?'grab':'crosshair';
 }
 function renderPaperUI(){
   const p=page();if(!p)return;
@@ -525,9 +736,14 @@ function bind(){
   document.querySelectorAll('[data-paper]').forEach(b=>b.onclick=()=>updatePaper('paper',b.dataset.paper));
   $('customPaper').onchange=e=>updatePaper('paper',e.target.value);
   $('exportPdf').onclick=exportPDF;
-  $('zoomIn').onclick=()=>{state.zoomManual=true;state.zoom=Math.min(160,state.zoom+10);setZoom();};
-  $('zoomOut').onclick=()=>{state.zoomManual=true;state.zoom=Math.max(25,state.zoom-10);setZoom();};
-  $('pencilOnly').onchange=e=>{state.selectedPenOnly=e.target.checked;canvas.style.touchAction=e.target.checked?'pan-x pan-y':'none';toast(e.target.checked?'Pencil-only drawing enabled':'Finger drawing enabled');};
+  $('zoomIn').onclick=()=>zoomTo(state.zoom+20);
+  $('zoomOut').onclick=()=>zoomTo(state.zoom-20);
+  $('zoomFit').onclick=fitAndCenter;
+  $('pencilOnly').onchange=e=>{state.selectedPenOnly=e.target.checked;toast(e.target.checked?'Finger gestures pan, Pencil writes':'Finger and Pencil drawing enabled');};
+  document.querySelectorAll('[data-shape]').forEach(b=>b.onclick=()=>{
+    state.shape=b.dataset.shape;
+    document.querySelectorAll('[data-shape]').forEach(x=>x.classList.toggle('selected',x===b));
+  });
   $('textForm').onsubmit=e=>{
     e.preventDefault();const value=$('textContent').value.trim(),p=page();if(!p)return;
     const old=p.texts.find(t=>t.id===state.selectedText);if(value){
@@ -538,17 +754,27 @@ function bind(){
     }else if(old){checkpoint();p.texts=p.texts.filter(t=>t.id!==old.id);touch();renderCanvas();toast('Text removed');}
     $('textDialog').close();
   };
-  canvas.addEventListener('pointerdown',onPointerDown);
-  canvas.addEventListener('pointermove',onPointerMove);
-  canvas.addEventListener('pointerup',onPointerUp);
-  canvas.addEventListener('pointercancel',onPointerUp);
-  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  inkOverlay.addEventListener('pointerdown',onPointerDown);
+  inkOverlay.addEventListener('pointermove',onPointerMove);
+  inkOverlay.addEventListener('pointerup',onPointerUp);
+  inkOverlay.addEventListener('pointercancel',onPointerUp);
+  inkOverlay.addEventListener('lostpointercapture',e=>{
+    if(state.activePointer===e.pointerId)onPointerUp(e);
+    touchContacts.delete(e.pointerId);
+    if(touchContacts.size<2 && gesture){gesture=null;renderCanvas();}
+  });
+  inkOverlay.addEventListener('contextmenu',e=>e.preventDefault());
+  $('canvasArea').addEventListener('wheel',e=>{
+    if(!e.ctrlKey&&!e.metaKey)return;
+    e.preventDefault();
+    zoomTo(state.zoom*(e.deltaY>0?.92:1.08),e.clientX,e.clientY);
+  },{passive:false});
   document.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();}
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();}
   });
-  window.addEventListener('resize',()=>{if(notebook())fitPage();});
+  window.addEventListener('resize',()=>{if(notebook()){if(!state.zoomManual)fitPage();renderCanvas();}});
   window.addEventListener('pagehide',()=>{if(saveTimer)saveNow();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&saveTimer)saveNow();});
   installExtraImageTool();
