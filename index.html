@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#295b9b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="InkNest">
+  <meta name="description" content="Your own unlimited, offline-first notebook studio.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>InkNest — your notes, your space</title>
+</head>
+<body>
+<svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5zM4 17.5A2.5 2.5 0 0 1 6.5 15H20"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.7" cy="10.7" r="6.7"/><path d="m16 16 4.5 4.5"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 20 5.1-1.3L20 7.7 16.3 4 5.3 15zM14.5 5.8l3.7 3.7"/></symbol>
+<symbol id="i-highlighter" viewBox="0 0 24 24"><path d="m5 14 9-9 5 5-9 9H5zM3 22h18M12 7l5 5"/></symbol>
+<symbol id="i-eraser" viewBox="0 0 24 24"><path d="m8 20-5-5 10-11a2 2 0 0 1 2.8 0l5 5a2 2 0 0 1 0 2.8L13 20zM8 20h13M8 10l7 7"/></symbol>
+<symbol id="i-type" viewBox="0 0 24 24"><path d="M4 6V4h16v2M12 4v16M8 20h8"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><path d="m9 7-5 5 5 5M4 12h10a6 6 0 0 1 0 12" transform="translate(0 -3)"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 7 5 5-5 5M20 12H10a6 6 0 0 0 0 12" transform="translate(0 -3)"/></symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 18v3h16v-3"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol>
+<symbol id="i-pages" viewBox="0 0 24 24"><rect x="7" y="6" width="13" height="15" rx="2"/><path d="M4 17V5a2 2 0 0 1 2-2h10"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2m3 0-1 15H7L6 6M10 10v7m4-7v7"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5 19 19M19 5 5 19"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/></symbol>
+</svg>
+<div class="app">
+<aside class="sidebar" id="sidebar">
+  <div class="brand"><div class="brand-mark">✽</div><div><strong>InkNest</strong><small>Make room for ideas</small></div></div>
+  <button class="create-btn" id="newNotebookSide"><svg><use href="#i-plus"/></svg> New notebook</button>
+  <div class="side-label">LIBRARY</div>
+  <button class="side-item active" id="navAll"><svg><use href="#i-grid"/></svg> All notebooks <span id="sideCount"></span></button>
+  <button class="side-item" id="navRecent"><svg><use href="#i-book"/></svg> Recently opened</button>
+  <div class="side-divider"></div>
+  <div class="side-label">YOUR SPACE</div>
+  <div class="side-hint">Everything stays on this iPad. No account, no subscription.</div>
+  <div class="side-bottom"><div class="offline-dot"></div><span>Local-first &amp; private</span><button id="backupSide" title="Export backup"><svg><use href="#i-download"/></svg></button></div>
+</aside>
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="iconbtn mobile-menu" id="mobileMenu" aria-label="Toggle menu"><svg><use href="#i-menu"/></svg></button>
+      <button class="iconbtn back-btn hidden" id="backLibrary" aria-label="Back to library"><svg><use href="#i-back"/></svg></button>
+      <div id="breadcrumb"><span class="crumb-label">My library</span><span class="crumb-chevron"> / </span><strong>Notebooks</strong></div>
+    </div>
+    <div class="topbar-right">
+      <span class="save-status" id="saveStatus"><span class="save-dot"></span> Saved on device</span>
+      <button class="iconbtn" id="topMore" aria-label="More options"><svg><use href="#i-ellipsis"/></svg></button>
+    </div>
+  </header>
+
+  <main class="library" id="library">
+    <div class="welcome-row">
+      <div><div class="eyebrow">YOUR CREATIVE SPACE ✨</div><h1>Every great idea<br><em>starts somewhere.</em></h1><p>Write, sketch, learn, and keep it all together.</p></div>
+      <div class="welcome-art" aria-hidden="true"><span class="art-star">✦</span><span class="art-circle">✎</span><span class="art-swirl">〰</span><span class="art-dot">✳</span></div>
+    </div>
+    <div class="library-heading"><div><h2 id="libraryTitle">Your notebooks <span id="notebookCount">0</span></h2><p id="librarySubtitle">A home for everything you're learning.</p></div><div class="library-actions"><div class="searchbox"><svg><use href="#i-search"/></svg><input id="searchInput" placeholder="Find a notebook..." autocomplete="off"></div><button class="primary-btn" id="newNotebookMain"><svg><use href="#i-plus"/></svg> New notebook</button></div></div>
+    <div class="notebook-grid" id="notebookGrid"></div>
+    <div class="empty-state hidden" id="emptyState"><div class="empty-illustration">✍️</div><h3>Fresh page, fresh possibilities.</h3><p>Your first notebook is waiting to be created.</p><button class="primary-btn" id="newNotebookEmpty"><svg><use href="#i-plus"/></svg> Create a notebook</button></div>
+    <div class="library-footer">Made for big ideas, tiny doodles, and everything in between. ♡</div>
+  </main>
+
+  <section class="editor hidden" id="editor" aria-label="Notebook editor">
+    <div class="editor-header">
+      <div class="notebook-identity"><span id="editorEmoji">📘</span><div><strong id="editorTitle">Notebook</strong><small id="editorSubtitle">Page 1</small></div></div>
+      <div class="editor-actions"><button class="pill-button" id="pagesToggle"><svg><use href="#i-pages"/></svg> Pages</button><button class="pill-button" id="paperToggle"><svg><use href="#i-settings"/></svg> Paper</button><button class="pill-button" id="exportPdf"><svg><use href="#i-download"/></svg> PDF</button></div>
+    </div>
+    <div class="tool-row">
+      <div class="tools-group">
+        <button class="tool active" data-tool="pen" title="Pen"><svg><use href="#i-pen"/></svg></button>
+        <button class="tool" data-tool="highlighter" title="Highlighter"><svg><use href="#i-highlighter"/></svg></button>
+        <button class="tool" data-tool="eraser" title="Eraser"><svg><use href="#i-eraser"/></svg></button>
+        <button class="tool" data-tool="text" title="Add neat typed text (supports iPad Scribble)"><svg><use href="#i-type"/></svg></button>
+      </div>
+      <div class="tools-separator"></div>
+      <div class="color-swatches" id="inkSwatches"><button class="ink-dot selected" data-color="#25344e" style="--swatch:#25344e" title="Ink blue"></button><button class="ink-dot" data-color="#f4f2ee" style="--swatch:#f4f2ee" title="White"></button><button class="ink-dot" data-color="#eb6571" style="--swatch:#eb6571" title="Coral"></button><button class="ink-dot" data-color="#6f69cf" style="--swatch:#6f69cf" title="Violet"></button><button class="ink-dot" data-color="#27a5a0" style="--swatch:#27a5a0" title="Teal"></button><label class="custom-color" title="Custom ink color">＋<input type="color" id="customInk" value="#25344e"></label></div>
+      <div class="tools-separator"></div>
+      <div class="stroke-control"><span>Size</span><input id="strokeSize" aria-label="Pen thickness" type="range" min="1" max="16" value="3"><output id="strokeSizeOutput">3</output></div>
+      <div class="tool-spacer"></div>
+      <div class="tools-group minimal"><button class="tool secondary" id="undoBtn" title="Undo"><svg><use href="#i-undo"/></svg></button><button class="tool secondary" id="redoBtn" title="Redo"><svg><use href="#i-redo"/></svg></button></div>
+    </div>
+    <div class="canvas-area" id="canvasArea">
+      <div class="page-holder" id="pageHolder"><canvas id="drawCanvas" width="960" height="1248" aria-label="Drawing paper"></canvas><div class="page-corner">✦ your space to create</div></div>
+    </div>
+    <div class="editor-footer"><div class="footer-left"><span class="autosaved"><span class="save-dot"></span> Autosaved</span><label class="finger-toggle"><input type="checkbox" id="pencilOnly"> Pencil only</label></div><div class="page-navigator"><button class="iconbtn" id="prevPage" title="Previous page"><svg><use href="#i-back"/></svg></button><span id="pageLabel">1 / 1</span><button class="iconbtn" id="nextPage" title="Next page"><svg><use href="#i-chevron"/></svg></button><button class="small-add-btn" id="addPage"><svg><use href="#i-plus"/></svg> Add page</button></div><div class="zoom-controls"><button id="zoomOut" title="Zoom out">−</button><span id="zoomLabel">75%</span><button id="zoomIn" title="Zoom in">+</button></div></div>
+    <aside class="page-drawer hidden" id="pageDrawer"><div class="drawer-heading"><strong>Pages</strong><button class="iconbtn" id="closePages"><svg><use href="#i-close"/></svg></button></div><div class="page-thumbnails" id="pageThumbnails"></div><button class="drawer-add-btn" id="addPageDrawer"><svg><use href="#i-plus"/></svg> Add a page</button></aside>
+    <div class="paper-popover hidden" id="paperPopover"><div class="popover-title">Page style <button id="closePaper" aria-label="Close">×</button></div><p>Paper type</p><div class="pattern-options"><button data-pattern="blank">Blank</button><button data-pattern="grid">Grid</button><button data-pattern="lines">Ruled</button><button data-pattern="dots">Dots</button></div><p>Paper color</p><div class="paper-colors"><button data-paper="#fffefa" style="background:#fffefa" title="Warm white"></button><button data-paper="#ffffff" style="background:#fff" title="White"></button><button data-paper="#172333" style="background:#172333" title="Midnight"></button><button data-paper="#fcecf1" style="background:#fcecf1" title="Rose"></button><button data-paper="#eef5e8" style="background:#eef5e8" title="Sage"></button><button data-paper="#e8efff" style="background:#e8efff" title="Sky"></button><label class="paper-custom" title="Custom page color">＋<input type="color" id="customPaper" value="#fffefa"></label></div><label class="apply-all"><input type="checkbox" id="applyAllPaper"> Apply to every page</label></div>
+  </section>
+</div>
+</div>
+
+<dialog id="notebookDialog" class="modal"><form method="dialog" id="notebookForm"><div class="modal-head"><span class="modal-kicker">MAKE IT YOURS</span><button value="cancel" type="button" class="close-modal" data-close="notebookDialog">×</button></div><h2 id="notebookDialogTitle">A new notebook ✨</h2><p>Give your next big idea a place to live.</p><label class="field-label" for="notebookName">Notebook name</label><input class="text-field" type="text" id="notebookName" maxlength="75" placeholder="e.g. Biology notes" required><label class="field-label" for="notebookSubject">Subject <span>(optional)</span></label><input class="text-field" type="text" id="notebookSubject" maxlength="60" placeholder="e.g. Year 10 Science"><div class="modal-row"><div><label class="field-label">Cover color</label><div class="cover-colors" id="coverColors"><button type="button" data-cover="blue" class="chosen" style="--cover:#5c8fd2"></button><button type="button" data-cover="lilac" style="--cover:#b2a0e0"></button><button type="button" data-cover="rose" style="--cover:#e6a1ae"></button><button type="button" data-cover="mint" style="--cover:#82c5b3"></button><button type="button" data-cover="yellow" style="--cover:#e8c875"></button><button type="button" data-cover="peach" style="--cover:#e9ac88"></button></div></div><div><label class="field-label" for="notebookEmoji">Icon</label><select class="text-field emoji-select" id="notebookEmoji"><option>📘</option><option>📖</option><option>📝</option><option>🧪</option><option>🧮</option><option>🎨</option><option>🌱</option><option>💡</option><option>🗂️</option><option>📚</option></select></div></div><button type="submit" class="primary-btn modal-submit" id="notebookSubmit">Create notebook <svg><use href="#i-chevron"/></svg></button></form></dialog>
+
+<dialog id="textDialog" class="modal text-modal"><form method="dialog" id="textForm"><div class="modal-head"><span class="modal-kicker">CLEAN &amp; TIDY</span><button type="button" class="close-modal" data-close="textDialog">×</button></div><h2 id="textDialogTitle">Add beautiful text</h2><p>Type normally or use Apple Pencil Scribble in the box below.</p><textarea id="textContent" class="text-field" rows="6" placeholder="Write something wonderful..."></textarea><div class="modal-row"><div><label class="field-label" for="textSize">Font size</label><select id="textSize" class="text-field"><option value="21">Small</option><option value="28" selected>Medium</option><option value="38">Large</option><option value="52">Heading</option></select></div><div><label class="field-label" for="textColor">Text color</label><input id="textColor" type="color" class="text-color-picker" value="#25344e"></div></div><button type="submit" class="primary-btn modal-submit">Place on page <svg><use href="#i-check"/></svg></button></form></dialog>
+
+<div class="context-menu hidden" id="contextMenu"><button id="renameNotebook">✏️ Rename</button><button id="duplicateNotebook">▢ Duplicate</button><button id="deleteNotebook" class="danger">🗑 Delete</button></div>
+<div class="toast" id="toast" role="status"></div>
+<input id="importFile" type="file" accept=".json,application/json" hidden>
+<script src="app.js"></script>
+</body>
+</html>
